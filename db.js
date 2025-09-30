@@ -6,7 +6,7 @@ dotenv.config();
 
 const { Pool } = pkg;
 
-// Configuração do pool para Railway
+// Configuração para Railway
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: {
