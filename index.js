@@ -7,7 +7,9 @@ const { Pool } = pkg;
 dotenv.config();
 
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || 'postgresql://neondb_owner:npg_wiM5J1BPFjUA@ep-wandering-cake-acp8ynxp-pooler.sa-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require',
+  connectionString:
+    process.env.DATABASE_URL ||
+    'postgresql://neondb_owner:npg_wiM5J1BPFjUA@ep-wandering-cake-acp8ynxp-pooler.sa-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require',
   ssl: { rejectUnauthorized: false },
 });
 
@@ -35,7 +37,6 @@ const createUsersTable = async () => {
   }
 };
 
-
 // Rota de teste
 app.get('/', (req, res) => {
   res.send('Servidor rodando!');
@@ -43,7 +44,7 @@ app.get('/', (req, res) => {
 
 // Adicionar usuário (Cadastro)
 app.post('/users', async (req, res) => {
-  const { nome, email, senha } = req.body; // vem do frontend
+  const { nome, email, senha } = req.body;
   if (!nome || !email || !senha) {
     return res.status(400).json({ error: 'Preencha todos os campos' });
   }
@@ -51,12 +52,12 @@ app.post('/users', async (req, res) => {
   try {
     const result = await pool.query(
       'INSERT INTO users (name, email, senha) VALUES ($1, $2, $3) RETURNING *',
-      [nome, email, senha] // mapeando nome -> name
+      [nome, email, senha]
     );
     res.status(201).json({ message: 'Usuário cadastrado!', user: result.rows[0] });
   } catch (err) {
     console.error('Erro ao adicionar usuário:', err);
-    if (err.code === '23505') { // email duplicado
+    if (err.code === '23505') {
       return res.status(400).json({ error: 'E-mail já cadastrado' });
     }
     res.status(500).json({ error: 'Erro ao adicionar usuário', details: err.message });
@@ -71,6 +72,30 @@ app.get('/users', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Erro ao buscar usuários' });
+  }
+});
+
+// Login
+app.post('/login', async (req, res) => {
+  const { email, senha } = req.body;
+  if (!email || !senha) {
+    return res.status(400).json({ error: 'Preencha todos os campos' });
+  }
+
+  try {
+    const result = await pool.query(
+      'SELECT id, name, email, created_at FROM users WHERE email = $1 AND senha = $2',
+      [email, senha]
+    );
+
+    if (result.rows.length > 0) {
+      res.json({ message: 'Login realizado!', user: result.rows[0] });
+    } else {
+      res.status(401).json({ error: 'Usuário ou senha incorretos' });
+    }
+  } catch (err) {
+    console.error('Erro no login:', err);
+    res.status(500).json({ error: 'Erro no servidor', details: err.message });
   }
 });
 
