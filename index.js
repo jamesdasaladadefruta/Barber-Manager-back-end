@@ -1,79 +1,74 @@
-// index.js
-import express from "express";
-import cors from "cors";
-import pool from "./db.js";
-import path, { dirname } from "path";
-import { fileURLToPath } from "url";
+import express from 'express';
+import cors from 'cors';
+import dotenv from 'dotenv';
+const { Pool } = require('pg');
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+// Configuração do pool de conexões
+const pool = new Pool({
+  connectionString: 'postgresql://neondb_owner:npg_wiM5J1BPFjUA@ep-wandering-cake-acp8ynxp-pooler.sa-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require' , 
+  ssl: {
+    rejectUnauthorized: false
+  }
+});
+
+dotenv.config(); 
 
 const app = express();
-
 app.use(express.json());
 app.use(cors());
 
-// 🔹 Inicializa o banco de dados
-async function initDB() {
+const PORT = process.env.PORT || 8081;
+
+// Criar tabela de usuários se não existir
+const createUsersTable = async () => {
   try {
     await pool.query(`
-      CREATE TABLE IF NOT EXISTS usuarios (
+      CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
-        nome VARCHAR(100) NOT NULL,
-        email VARCHAR(150) UNIQUE NOT NULL,
-        senha VARCHAR(200) NOT NULL
+        name VARCHAR(100) NOT NULL,
+        email VARCHAR(100) UNIQUE NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
-    console.log("✅ Tabela 'usuarios' verificada/criada com sucesso.");
+    console.log("Tabela 'users' criada ou já existente!");
   } catch (err) {
-    console.error("❌ Erro ao criar tabela:", err);
+    console.error("Erro ao criar tabela:", err);
   }
-}
-initDB();
+};
 
-// ======================
-// 📌 Rotas da API
-// ======================
-app.get("/api/usuarios", async (req, res) => {
-  try {
-    const result = await pool.query("SELECT * FROM usuarios");
-    res.json(result.rows);
-  } catch (err) {
-    console.error("Erro ao buscar usuários:", err);
-    res.status(500).json({ erro: "Erro ao buscar usuários" });
-  }
+// Rota de teste
+app.get('/', (req, res) => {
+  res.send('Servidor rodando!');
 });
 
-app.post("/api/usuarios", async (req, res) => {
-  const { nome, email, senha } = req.body;
+// Adicionar usuário
+app.post('/users', async (req, res) => {
+  const { name, email } = req.body;
   try {
     const result = await pool.query(
-      "INSERT INTO usuarios (nome, email, senha) VALUES ($1, $2, $3) RETURNING *",
-      [nome, email, senha]
+      'INSERT INTO users (name, email) VALUES ($1, $2) RETURNING *',
+      [name, email]
     );
-    res.status(201).json({
-      mensagem: "Usuário criado com sucesso!",
-      usuario: result.rows[0],
-    });
+    res.json(result.rows[0]);
   } catch (err) {
-    console.error("Erro ao criar usuário:", err);
-    res.status(500).json({ erro: "Erro ao criar usuário" });
+    console.error(err);
+    res.status(500).json({ error: 'Erro ao adicionar usuário' });
   }
 });
 
-// ======================
-// 📌 Servindo o React buildado
-// ======================
-app.use(express.static(path.join(__dirname, "dist")));
-
-app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "dist", "index.html"));
+// Listar usuários
+app.get('/users', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM users ORDER BY id');
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Erro ao buscar usuários' });
+  }
 });
 
-// ======================
-// 📌 Iniciar servidor
-// ======================
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
+// Iniciar servidor
+app.listen(PORT, async () => {
+  await createUsersTable();
   console.log(`🚀 Servidor rodando na porta ${PORT}`);
 });
