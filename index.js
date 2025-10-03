@@ -35,6 +35,7 @@ const createUsersTable = async () => {
   }
 };
 
+
 // Rota de teste
 app.get('/', (req, res) => {
   res.send('Servidor rodando!');
