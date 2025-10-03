@@ -1,7 +1,9 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-const { Pool } = require('pg');
+import pkg from 'pg';
+const { Pool } = pkg;
+
 
 // Configuração do pool de conexões
 const pool = new Pool({
