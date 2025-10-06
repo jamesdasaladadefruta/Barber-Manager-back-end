@@ -3,7 +3,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import pkg from 'pg';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs'; // 🔹 Usando bcryptjs
 
 const { Pool } = pkg;
 dotenv.config();
@@ -55,7 +55,7 @@ const createTables = async () => {
       "SELECT * FROM users WHERE email = 'admin@admin'"
     );
     if (adminExists.rows.length === 0) {
-      const hash = await bcrypt.hash('admin', 10);
+      const hash = bcrypt.hashSync('admin', 10); // 🔹 hashSync com bcryptjs
       await pool.query(
         'INSERT INTO users (name, email, senha, role) VALUES ($1, $2, $3, $4)',
         ['Administrador', 'admin@admin', hash, 'admin']
@@ -88,7 +88,7 @@ app.post('/users', async (req, res) => {
   }
 
   try {
-    const senhaHash = await bcrypt.hash(senha, 10);
+    const senhaHash = bcrypt.hashSync(senha, 10); // 🔹 hashSync
     const result = await pool.query(
       'INSERT INTO users (name, email, senha, role) VALUES ($1, $2, $3, $4) RETURNING id, name, email, role, created_at',
       [nome, email, senhaHash, 'user']
@@ -128,7 +128,7 @@ app.post('/login', async (req, res) => {
     if (result.rows.length === 0) return res.status(401).json({ error: 'Usuário não encontrado' });
 
     const user = result.rows[0];
-    const senhaCorreta = await bcrypt.compare(senha, user.senha);
+    const senhaCorreta = bcrypt.compareSync(senha, user.senha); // 🔹 compareSync
     if (!senhaCorreta) return res.status(401).json({ error: 'Senha incorreta' });
 
     res.json({
