@@ -3,7 +3,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import pkg from 'pg';
-import bcrypt from 'bcryptjs'; // 🔹 Usando bcryptjs
+import bcrypt from 'bcryptjs';
 
 const { Pool } = pkg;
 dotenv.config();
@@ -26,7 +26,6 @@ const PORT = process.env.PORT || 8081;
 =========================================================== */
 const createTables = async () => {
   try {
-    // Tabela de usuários
     await pool.query(`
       CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
@@ -38,7 +37,6 @@ const createTables = async () => {
       );
     `);
 
-    // Tabela de pedidos
     await pool.query(`
       CREATE TABLE IF NOT EXISTS pedidos (
         id SERIAL PRIMARY KEY,
@@ -50,12 +48,12 @@ const createTables = async () => {
       );
     `);
 
-    // Criar admin padrão se não existir
+    // Criar admin padrão
     const adminExists = await pool.query(
       "SELECT * FROM users WHERE email = 'admin@admin'"
     );
     if (adminExists.rows.length === 0) {
-      const hash = bcrypt.hashSync('admin', 10); // 🔹 hashSync com bcryptjs
+      const hash = bcrypt.hashSync('admin', 10);
       await pool.query(
         'INSERT INTO users (name, email, senha, role) VALUES ($1, $2, $3, $4)',
         ['Administrador', 'admin@admin', hash, 'admin']
@@ -83,21 +81,17 @@ app.get('/', (req, res) => {
 // Cadastro
 app.post('/users', async (req, res) => {
   const { nome, email, senha } = req.body;
-  if (!nome || !email || !senha) {
-    return res.status(400).json({ error: 'Preencha todos os campos' });
-  }
+  if (!nome || !email || !senha) return res.status(400).json({ error: 'Preencha todos os campos' });
 
   try {
-    const senhaHash = bcrypt.hashSync(senha, 10); // 🔹 hashSync
+    const senhaHash = bcrypt.hashSync(senha, 10);
     const result = await pool.query(
       'INSERT INTO users (name, email, senha, role) VALUES ($1, $2, $3, $4) RETURNING id, name, email, role, created_at',
       [nome, email, senhaHash, 'user']
     );
     res.status(201).json({ message: 'Usuário cadastrado!', user: result.rows[0] });
   } catch (err) {
-    if (err.code === '23505') {
-      return res.status(400).json({ error: 'E-mail já cadastrado' });
-    }
+    if (err.code === '23505') return res.status(400).json({ error: 'E-mail já cadastrado' });
     console.error(err);
     res.status(500).json({ error: 'Erro ao cadastrar usuário', details: err.message });
   }
@@ -106,9 +100,7 @@ app.post('/users', async (req, res) => {
 // Listar usuários
 app.get('/users', async (req, res) => {
   try {
-    const result = await pool.query(
-      'SELECT id, name, email, role, created_at FROM users ORDER BY id'
-    );
+    const result = await pool.query('SELECT id, name, email, role, created_at FROM users ORDER BY id');
     res.json(result.rows);
   } catch (err) {
     console.error(err);
@@ -119,16 +111,14 @@ app.get('/users', async (req, res) => {
 // Login
 app.post('/login', async (req, res) => {
   const { email, senha } = req.body;
-  if (!email || !senha) {
-    return res.status(400).json({ error: 'Preencha todos os campos' });
-  }
+  if (!email || !senha) return res.status(400).json({ error: 'Preencha todos os campos' });
 
   try {
     const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
     if (result.rows.length === 0) return res.status(401).json({ error: 'Usuário não encontrado' });
 
     const user = result.rows[0];
-    const senhaCorreta = bcrypt.compareSync(senha, user.senha); // 🔹 compareSync
+    const senhaCorreta = bcrypt.compareSync(senha, user.senha);
     if (!senhaCorreta) return res.status(401).json({ error: 'Senha incorreta' });
 
     res.json({
@@ -138,6 +128,7 @@ app.post('/login', async (req, res) => {
         id: user.id,
         name: user.name,
         email: user.email,
+        role: user.role,
         created_at: user.created_at,
       },
     });
@@ -154,11 +145,13 @@ app.post('/login', async (req, res) => {
 // Criar pedido
 app.post('/api/pedidos', async (req, res) => {
   const { servicos, total, data, horario } = req.body;
-  if (!servicos || !total || !data || !horario) {
-    return res.status(400).json({ error: 'Campos obrigatórios ausentes.' });
-  }
+  if (!servicos || !total || !data || !horario) return res.status(400).json({ error: 'Campos obrigatórios ausentes.' });
 
   try {
+    // Verifica se horário já está ocupado
+    const exists = await pool.query('SELECT * FROM pedidos WHERE data = $1 AND horario = $2', [data, horario]);
+    if (exists.rows.length > 0) return res.status(400).json({ error: 'Horário já ocupado.' });
+
     const result = await pool.query(
       'INSERT INTO pedidos (servicos, total, data, horario) VALUES ($1, $2, $3, $4) RETURNING *',
       [servicos, total, data, horario]
