@@ -152,7 +152,7 @@ app.post('/login', async (req, res) => {
 });
 
 /* ===========================================================
-   🔹 ROTAS DE PEDIDOS (INTEGRAÇÃO COM MODAL)
+   🔹 ROTAS DE PEDIDOS
 =========================================================== */
 
 // Criar pedido
