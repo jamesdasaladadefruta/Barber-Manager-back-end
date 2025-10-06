@@ -1,7 +1,9 @@
+// backend/index.js
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import pkg from 'pg';
+import bcrypt from 'bcrypt';
 
 const { Pool } = pkg;
 dotenv.config();
@@ -20,22 +22,23 @@ app.use(cors());
 const PORT = process.env.PORT || 8081;
 
 /* ===========================================================
-   🔹 CRIAR TABELAS
+   🔹 CRIAR TABELAS + ADMIN PADRÃO
 =========================================================== */
 const createTables = async () => {
   try {
-    // Tabela de usuários
+    // 🔸 Tabela de usuários
     await pool.query(`
       CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
         name VARCHAR(100) NOT NULL,
         email VARCHAR(100) UNIQUE NOT NULL,
-        senha VARCHAR(100) NOT NULL,
+        senha VARCHAR(255) NOT NULL,
+        role VARCHAR(20) DEFAULT 'user',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
 
-    // Tabela de pedidos
+    // 🔸 Tabela de pedidos
     await pool.query(`
       CREATE TABLE IF NOT EXISTS pedidos (
         id SERIAL PRIMARY KEY,
@@ -48,23 +51,36 @@ const createTables = async () => {
     `);
 
     console.log("✅ Tabelas 'users' e 'pedidos' criadas ou já existentes!");
+
+    // 🔸 Criar admin padrão (caso não exista)
+    const adminExists = await pool.query(
+      "SELECT * FROM users WHERE email = 'admin@admin'"
+    );
+    if (adminExists.rows.length === 0) {
+      const hash = await bcrypt.hash('admin', 10);
+      await pool.query(
+        'INSERT INTO users (name, email, senha, role) VALUES ($1, $2, $3, $4)',
+        ['Administrador', 'admin@admin', hash, 'admin']
+      );
+      console.log("👑 Admin criado com sucesso (admin@admin / senha: admin)");
+    }
   } catch (err) {
     console.error("❌ Erro ao criar tabelas:", err);
   }
 };
 
 /* ===========================================================
-   🔹 ROTAS DE TESTE
+   🔹 ROTA DE TESTE
 =========================================================== */
 app.get('/', (req, res) => {
-  res.send('🚀 Servidor rodando!');
+  res.send('🚀 Servidor Barber Manager rodando!');
 });
 
 /* ===========================================================
    🔹 ROTAS DE USUÁRIOS
 =========================================================== */
 
-// Cadastro
+// 🧾 Cadastro de usuário
 app.post('/users', async (req, res) => {
   const { nome, email, senha } = req.body;
   if (!nome || !email || !senha) {
@@ -72,9 +88,10 @@ app.post('/users', async (req, res) => {
   }
 
   try {
+    const senhaHash = await bcrypt.hash(senha, 10);
     const result = await pool.query(
-      'INSERT INTO users (name, email, senha) VALUES ($1, $2, $3) RETURNING *',
-      [nome, email, senha]
+      'INSERT INTO users (name, email, senha, role) VALUES ($1, $2, $3, $4) RETURNING id, name, email, role, created_at',
+      [nome, email, senhaHash, 'user']
     );
     res.status(201).json({ message: 'Usuário cadastrado!', user: result.rows[0] });
   } catch (err) {
@@ -86,10 +103,10 @@ app.post('/users', async (req, res) => {
   }
 });
 
-// Listar usuários
+// 📋 Listar usuários
 app.get('/users', async (req, res) => {
   try {
-    const result = await pool.query('SELECT id, name, email, created_at FROM users ORDER BY id');
+    const result = await pool.query('SELECT id, name, email, role, created_at FROM users ORDER BY id');
     res.json(result.rows);
   } catch (err) {
     console.error(err);
@@ -97,7 +114,7 @@ app.get('/users', async (req, res) => {
   }
 });
 
-// Login
+// 🔐 Login
 app.post('/login', async (req, res) => {
   const { email, senha } = req.body;
   if (!email || !senha) {
@@ -105,16 +122,29 @@ app.post('/login', async (req, res) => {
   }
 
   try {
-    const result = await pool.query(
-      'SELECT id, name, email, created_at FROM users WHERE email = $1 AND senha = $2',
-      [email, senha]
-    );
+    const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
 
-    if (result.rows.length > 0) {
-      res.json({ message: 'Login realizado!', user: result.rows[0] });
-    } else {
-      res.status(401).json({ error: 'Usuário ou senha incorretos' });
+    if (result.rows.length === 0) {
+      return res.status(401).json({ error: 'Usuário não encontrado' });
     }
+
+    const user = result.rows[0];
+    const senhaCorreta = await bcrypt.compare(senha, user.senha);
+
+    if (!senhaCorreta) {
+      return res.status(401).json({ error: 'Senha incorreta' });
+    }
+
+    res.json({
+      message: 'Login realizado com sucesso!',
+      role: user.role,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        created_at: user.created_at,
+      },
+    });
   } catch (err) {
     console.error('Erro no login:', err);
     res.status(500).json({ error: 'Erro no servidor', details: err.message });
@@ -168,5 +198,5 @@ app.get('/api/pedidos', async (req, res) => {
 =========================================================== */
 app.listen(PORT, async () => {
   await createTables();
-  console.log(`🚀 Servidor rodando na porta ${PORT}`);
+  console.log(`🔥 Servidor rodando na porta ${PORT}`);
 });
